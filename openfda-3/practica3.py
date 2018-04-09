@@ -12,7 +12,7 @@ OpenFda Drug Label
 #Esta parte ya ha sido explicado en las practicas anteriores
 URL = "api.fda.gov"
 API = "/drug/label.json?limit="
-limit = "10"
+limit = "100"
 
 headers = {'User-Agent': 'http-client'}
 
@@ -65,7 +65,7 @@ html_file = """
         </table>
     <br>
         <div style="color:#003366;text-align:center;font-size:160%"> 
-            <a href="https://api.fda.gov/drug/label.json?limit=10" >"Link con toda la informacion respecto a estos medicamentos"</a>
+            <a href="https://api.fda.gov/drug/label.json?limit={limite}" >"Link con toda la informacion respecto a estos medicamentos"</a>
         </div>
     </p>
     <p1>
@@ -74,7 +74,7 @@ html_file = """
     </a></p1>
   </body>
   </html>
-""".format(contenido = contenido)#Mediante la función format introduzco la información antes recogida en la variable contenido dentro de la tabla del archivo html.
+""".format(contenido = contenido,limite=limit)#Mediante la función format introduzco la información antes recogida en la variable contenido dentro de la tabla del archivo html.
 
 #Esta es la parte del servidor que se encarga de enviar la respuesta al cliente.
 class testHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
