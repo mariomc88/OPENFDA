@@ -5,9 +5,13 @@ import socketserver
 import json
 from urllib.parse import urlsplit
 
+import os
+os.putenv('LANG', 'en_US.UTF-8')
+os.putenv('LC_ALL', 'en_US.UTF-8')
 
 # -- Puerto donde lanzar el servidor
 PORT = 8000
+INDEX_FILE = "index.html"
 socketserver.TCPServer.allow_reuse_address = True
 
 # -- Parametros de configuracion
@@ -16,70 +20,16 @@ REST_RESOURCE_NAME = "/drug/label.json"
 headers = {'User-Agent': 'http-client'}
 
 
-class OpenFDAClient(http.server.BaseHTTPRequestHandler):
-    def get_path(self):
-        limite = 10
-        print("Recurso pedido: {}".format(self.path))
+# Clase con nuestro manejador. Es una clase derivada de BaseHTTPRequestHandler
+# Esto significa que "hereda" todos los metodos de esta clase. Y los que
+# nosotros consideremos los podemos reemplazar por los nuestros
+class TestHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
-        message = ""  # type: str
-        print("Recurso pedido: {}".format(self.path))
-        parse = urlsplit(self.path)
-        endpoint = parse[2]
-        params = parse[3]
-
-        print("Endpoint: {}, params: {}".format(endpoint, params))
-
-        # Obtener los parametros
-        if params:
-            print(params)
-            print("Hay parametros")
-            if "&" in params:
-                params = params.split("&")
-                for term in params:
-                    pieza = term.split("=")
-                    if pieza[0] == "limit":
-                        self.limit = int(pieza[1])
-                        print("Limit: {}".format(limite))
-                    else:
-                        valor = pieza[1]
-
-            else:
-                pieza = params.split("=")
-                if pieza[0] == "limit":
-                    print("Hay un límite")
-                    self.limit = int(pieza[1])
-                    print("Limit: {}".format(limite))
-                else:
-                    valor = pieza[1]
-
-        else:
-            print("SIN PARAMETROS")
-        search_str = ""
-        if "searchDrug" in endpoint:
-            buscador = "generic_name"
-            parametro = buscador + ":" + valor
-        elif "searchCompany" in endpoint:
-            buscador = "manufacturer_name"
-            parametro = buscador + ":" + valor
-
-        if "search" in endpoint:
-            search_str += "search="
-            search_str += parametro
-        print(search_str)
-        if endpoint == "/searchDrug" or endpoint == "/searchCompany" or endpoint == "/listDrugs" or endpoint == "/listCompanies":
-            # Crear la cadena con la peticion
-            req_str = "{}?limit={}".format(REST_RESOURCE_NAME, limit)
-
-            # Si hay que hacer busqueda, añadirla a la cadena de peticion
-            if search_str != "":
-                req_str += "&{}".format(search_str)
-        return endpoint
-
-    def get_json(self):
+    def openfda_req(self, limit=1, search_str=""):
         """Realizar una peticion a openFPGA"""
 
         # Crear la cadena con la peticion
-        req_str = "{}?limit={}".format(REST_RESOURCE_NAME, self.limit)
+        req_str = "{}?limit={}".format(REST_RESOURCE_NAME, limit)
 
         # Si hay que hacer busqueda, añadirla a la cadena de peticion
         if search_str != "":
@@ -106,131 +56,434 @@ class OpenFDAClient(http.server.BaseHTTPRequestHandler):
         conn.close()
 
         # ---- Procesar el contenido JSON
-        json_file = json.loads(drugs_json)
-        results = json_file["results"]
-        return results
+        return json.loads(drugs_json)
 
-class OpenFDAHTML(OpenFDAClient):
-    def index_page(self):
+    def req_index(self,status=200):
+        """Devolver el mensaje con la página indice"""
+
         index = """
-                           <html>
-                        <head>
-                            <title>OpenFDA App</title>
-                        </head>
-                        <body align=center style='background-color: #5499C7  '>
-                            <h1>Bienvenido a la pagina principal de la App </h1>
-                            <br>
-                            <form method="get" action="listDrugs">
-                                <input type = "submit" value="Lista Medicamentos">
-                                </input>
-                            </form>
-                            <br>
-                            <br>
-                            <form method="get" action="searchDrug">
-                                <input type = "submit" value="Buscar Medicamentos">
-                                <input type = "text" name="drug"></input>
-                                </input>
-                            </form>
-                            <br>
-                            <br>
-                            <form method="get" action="listCompanies">
-                                <input type = "submit" value="Lista Empresas">
-                                </input>
-                            </form>
-                            <br>
-                            <br>
-                            <form method="get" action="searchCompany">
-                                <input type = "submit" value="Buscador Empresas">
-                                <input type = "text" name="company"></input>
-                                </input>
-                            </form>
-                            <br>
-                            <br>
-                            <form method="get" action="listWarnings">
-                                <input type = "submit" value="Lista Advertencias">
-                                </input>
-                            </form>
-                            <br>
-                            <br>
-                            <p> Practica hecha por Javier Alvarez Benito </p>
-                            <p> Ingenieria Biomedica - URJC </p>
-                        </body>
-                    </html>"""
+                   <html>
+                <head>
+                    <title>OpenFDA App</title>
+                </head>
+                <body align=center style='background-color: #5499C7  '>
+                    <h1>Bienvenido a la pagina principal de la App </h1>
+                    <br>
+                    <form method="get" action="listDrugs">
+                        <input type = "submit" value="Lista Medicamentos">
+                        </input>
+                    </form>
+                    <br>
+                    <br>
+                    <form method="get" action="searchDrug">
+                        <input type = "submit" value="Buscar Medicamentos">
+                        <input type = "text" name="drug"></input>
+                        </input>
+                    </form>
+                    <br>
+                    <br>
+                    <form method="get" action="listCompanies">
+                        <input type = "submit" value="Lista Empresas">
+                        </input>
+                    </form>
+                    <br>
+                    <br>
+                    <form method="get" action="searchCompany">
+                        <input type = "submit" value="Buscador Empresas">
+                        <input type = "text" name="company"></input>
+                        </input>
+                    </form>
+                    <br>
+                    <br>
+                    <form method="get" action="listWarnings">
+                        <input type = "submit" value="Lista Advertencias">
+                        </input>
+                    </form>
+                    <br>
+                    <br>
+                    <p> Practica hecha por Javier Alvarez Benito </p>
+                    <p> Ingenieria Biomedica - URJC </p>
+                </body>
+            </html>"""
 
         return index
 
-    def content(self, lista):
-        contenido = """ <html>
-                            <head><title>Resultados de su búsqueda</title></head>
-                                        <body>
-                                            <ul>"""
-        for linea in lista:
-            contenido += "<li>" + linea +"</li>"
-        contenido += """
-                                         </ul>
-                                        </body>
-                                    </html>"""
+    def req_listdrugs(self, limit,status=200):
+        """Devolver el mensaje con la peticion del listado de fármacos"""
+        # Lanzar la peticion a openFDA
+        # Establecer la conexion con el servidor
+        drugs = self.openfda_req(limit)
 
+        # -- Ahora drugs es un diccionario que contiene la respuesta recibida
+        # -- Necesitamos conocer su estructura para procesarlo correctamente
 
-        return contenido
+        # Campo META, que contiene informacion sobre la busqueda
+        meta = drugs['meta']
 
-class OpenFDAParser(OpenFDAHTML):
-    def do_GET(self):
-        status = 200
-        send_html = True
-        medicamentos = []
-        endpoint = OpenFDAClient.get_path(self)
-        results = OpenFDAClient.get_json(self)
+        # Por ejemplo, podemos saber el numero de objetos totales en la base de datos y los devueltos
+        # en esta busqueda
+        # Objetos totales: meta.results.total
+        # Objetos recibidos: meta.results.limit
 
-        if endpoint == "/":
-            html_file = index
+        total = meta['results']['total']
+        limit = meta['results']['limit']
 
-        elif endpoint == "/listDrugs":
-            for drug in results:
+        print("* Objetos recibidos: {} / {}".format(limit, total))
 
-                # Nombre del componente principal: drugs.openfda.substance_name[0]
+        message = (' <!DOCTYPE html>\n'
+                   '<html lang="es">\n'
+                   '<head>\n'
+                   '    <meta charset="UTF-8">\n'
+                   '</head>\n'
+                   '<body>\n'
+                   '<p>Nombre. Marca. Fabricante. ID. Propósito</p>'
+                   '\n'
+                   '<ul>\n')
+
+        # Campo RESULTS: contiene los resultados de la busqueda
+        # drugs.results[0]
+        for drug in drugs['results']:
+
+            # Nombre del componente principal: drugs.openfda.substance_name[0]
+            if drug['openfda']:
+                nombre = drug['openfda']['substance_name'][0]
+
+                # Marca: drugs.openfda.brand_name[0]
+                marca = drug['openfda']['brand_name'][0]
+
+                # Nombre del fabricante: drugs.openfda.manufacturer_name[0]
+                fabricante = drug['openfda']['manufacturer_name'][0]
+            else:
+                nombre = "Desconocido"
+                marca = "Desconocido"
+                fabricante = "Desconocido"
+
+            # Identificador: drugs.id
+            id = drug['id']
+
+            # Proposito: drugs.purpose[0]
+            try:
+                proposito = drug['purpose'][0]
+            except KeyError:
+                proposito = "Desconocido"
+
+            message += "<li>{}. {}. {}. {}. {}</li>\n".format(nombre, marca, fabricante, id, proposito)
+
+        # Parte final del html
+        message += ('</ul>\n'
+                    '\n'
+                    '<a href="/">Home</a>'
+                    '</body>\n'
+                    '</html>')
+
+        return message
+
+    def req_listcompanies(self, limit):
+
+        # Lanzar la peticion a openFDA
+        # Establecer la conexion con el servidor
+        drugs = self.openfda_req(limit)
+
+        # -- Ahora drugs es un diccionario que contiene la respuesta recibida
+        # -- Necesitamos conocer su estructura para procesarlo correctamente
+
+        # Campo META, que contiene informacion sobre la busqueda
+        meta = drugs['meta']
+
+        # Por ejemplo, podemos saber el numero de objetos totales en la base de datos y los devueltos
+        # en esta busqueda
+        # Objetos totales: meta.results.total
+        # Objetos recibidos: meta.results.limit
+
+        total = meta['results']['total']
+        limit = meta['results']['limit']
+
+        print("* Objetos recibidos: {} / {}".format(limit, total))
+
+        message = (' <!DOCTYPE html>\n'
+                   '<html lang="es">\n'
+                   '<head>\n'
+                   '    <meta charset="UTF-8">\n'
+                   '</head>\n'
+                   '<body>\n'
+                   '<p>Fabricantes</p>'
+                   '\n'
+                   '<ul>\n')
+
+        # Campo RESULTS: contiene los resultados de la busqueda
+        # drugs.results[0]
+        for drug in drugs['results']:
+
+            # Nombre del componente principal: drugs.openfda.substance_name[0]
+            if drug['openfda']:
+
                 try:
-                    medicamentos.append(drug['warnings'][0])
+                    message += "<li>{}</li>".format(drug['openfda']['manufacturer_name'][0])
                 except KeyError:
-                    medicamentos.append("Sin advertencias")
-            html_file = self.content(medicamentos)
+                    message += "<li>{}</li>".format("Sin manufacturer_name")
+            else:
+                message += "<li>{}</li>".format("Sin manufacturer_name")
+
+
+        # Parte final del html
+        message += ('</ul>\n'
+                    '\n'
+                    '<a href="/">Home</a>'
+                    '</body>\n'
+                    '</html>')
+
+        print("Aqui llega...")
+        return message
+    def req_searchcompany(self,limit):
+
+        drugs = self.openfda_req(limit)
+
+        # -- Ahora drugs es un diccionario que contiene la respuesta recibida
+        # -- Necesitamos conocer su estructura para procesarlo correctamente
+
+        # Campo META, que contiene informacion sobre la busqueda
+        meta = drugs['meta']
+
+        # Por ejemplo, podemos saber el numero de objetos totales en la base de datos y los devueltos
+        # en esta busqueda
+        # Objetos totales: meta.results.total
+        # Objetos recibidos: meta.results.limit
+
+        total = meta['results']['total']
+        limit = meta['results']['limit']
+        print("* Objetos recibidos: {} / {}".format(limit, total))
+
+        message = (' <!DOCTYPE html>\n'
+                   '<html lang="es">\n'
+                   '<head>\n'
+                   '    <meta charset="UTF-8">\n'
+                   '</head>\n'
+                   '<body>\n'
+                   '<p>Fabricantes</p>'
+                   '\n'
+                   '<ul>\n')
+
+        for drug in drugs['results']:
+
+            # Nombre del componente principal: drugs.openfda.substance_name[0]
+            if drug['openfda']:
+
+                try:
+                    message += "<li>{}</li>".format(drug['openfda']['manufacturer_name'][0])
+                except KeyError:
+                    message += "<li>{}</li>".format("Sin nombre del fabricante")
+            else:
+                message += "<li>{}</li>".format("Sin nombre del fabricante")
+
+
+        message += ('</ul>\n'
+                    '\n'
+                    '<a href="/">Home</a>'
+                    '</body>\n'
+                    '</html>')
+
+        print("Aqui llega...")
+        return message
+    def req_searchDrug(self,limit):
+        drugs = self.openfda_req(limit)
+
+        # -- Ahora drugs es un diccionario que contiene la respuesta recibida
+        # -- Necesitamos conocer su estructura para procesarlo correctamente
+
+        # Campo META, que contiene informacion sobre la busqueda
+        meta = drugs['meta']
+
+        # Por ejemplo, podemos saber el numero de objetos totales en la base de datos y los devueltos
+        # en esta busqueda
+        # Objetos totales: meta.results.total
+        # Objetos recibidos: meta.results.limit
+
+        total = meta['results']['total']
+        limit = meta['results']['limit']
+        print("* Objetos recibidos: {} / {}".format(limit, total))
+
+        message = (' <!DOCTYPE html>\n'
+                   '<html lang="es">\n'
+                   '<head>\n'
+                   '    <meta charset="UTF-8">\n'
+                   '</head>\n'
+                   '<body>\n'
+                   '<p>Fabricantes</p>'
+                   '\n'
+                   '<ul>\n')
+
+        for drug in drugs['results']:
+
+            # Nombre del componente principal: drugs.openfda.substance_name[0]
+            if drug['openfda']:
+
+                try:
+                    message += "<li>{}</li>".format(drug['openfda']['generic_name'][0])
+                except KeyError:
+                    message += "<li>{}</li>".format("Sin nombre genérico")
+            else:
+                message += "<li>{}</li>".format("Sin nombre del fabricante")
+
+        message += ('</ul>\n'
+                    '\n'
+                    '<a href="/">Home</a>'
+                    '</body>\n'
+                    '</html>')
+
+        print("Aqui llega...")
+        return message
+
+
+
+    # GET. Este metodo se invoca automaticamente cada vez que hay una
+    # peticion GET por HTTP. El recurso que nos solicitan se encuentra
+    # en self.path
+
+    def req_listwarnings(self,limit):
+        drugs = self.openfda_req(limit)
+
+        # -- Ahora drugs es un diccionario que contiene la respuesta recibida
+        # -- Necesitamos conocer su estructura para procesarlo correctamente
+
+        # Campo META, que contiene informacion sobre la busqueda
+        meta = drugs['meta']
+
+        # Por ejemplo, podemos saber el numero de objetos totales en la base de datos y los devueltos
+        # en esta busqueda
+        # Objetos totales: meta.results.total
+        # Objetos recibidos: meta.results.limit
+
+        total = meta['results']['total']
+        limit = meta['results']['limit']
+        print("* Objetos recibidos: {} / {}".format(limit, total))
+
+        message = (' <!DOCTYPE html>\n'
+                   '<html lang="es">\n'
+                   '<head>\n'
+                   '    <meta charset="UTF-8">\n'
+                   '</head>\n'
+                   '<body>\n'
+                   '<p>Advertencias</p>'
+                   '\n'
+                   '<ul>\n')
+        for drug in drugs['results']:
+
+            # Nombre del componente principal: drugs.openfda.substance_name[0]
+            try:
+                message += "<li>{}</li>".format(drug['warnings'][0])
+            except KeyError:
+                message += "<li>{}</li>".format("Sin advertencias")
+
+
+        message += ('</ul>\n'
+                    '\n'
+                    '<a href="/">Home</a>'
+                    '</body>\n'
+                    '</html>')
+
+        print("Aqui llega...")
+        return message
+
+    # GET. Este metodo se invoca automaticamente cada vez que hay una
+    # peticion GET por HTTP. El recurso que nos solicitan se encuentra
+    # en self.path
+
+    def do_GET(self):
+
+        print("Recurso pedido: {}".format(self.path))
+
+        message = ""  # type: str
+        redirect = True
+        limit = "10"
+        status = 200
+        print("Recurso pedido: {}".format(self.path))
+        parse = urlsplit(self.path)
+        endpoint = parse[2]
+        params = parse[3]
+
+        print("Endpoint: {}, params: {}".format(endpoint, params))
+
+        # Obtener los parametros
+        if params:
+            print(params)
+            print("Hay parametros")
+            if "&" in params:
+                params = params.split("&")
+                for term in params:
+                    pieza = term.split("=")
+                    if pieza[0] == "limit":
+                        limit = int(pieza[1])
+                        print("Limit: {}".format(limit))
+                    else:
+                        valor = pieza[1]
+
+            else:
+                pieza = params.split("=")
+                if pieza[0] == "limit":
+                    print("Hay un límite")
+                    limit = int(pieza[1])
+                    print("Limit: {}".format(limit))
+                else:
+                    valor = pieza[1]
+
+        else:
+            print("SIN PARAMETROS")
+        search_str = ""
+        if "searchDrug" in endpoint:
+            buscador = "generic_name"
+            parametro = buscador + ":" + valor
+        elif "searchCompany" in endpoint:
+            buscador = "manufacturer_name"
+            parametro = buscador + ":" + valor
+
+        if "search" in endpoint:
+            search_str += "search="
+            search_str += parametro
+        print(search_str)
+        if endpoint == "/searchDrug" or endpoint == "/searchCompany" or endpoint == "/listDrugs" or endpoint == "/listCompanies":
+            # Crear la cadena con la peticion
+            req_str = "{}?limit={}".format(REST_RESOURCE_NAME, limit)
+
+            # Si hay que hacer busqueda, añadirla a la cadena de peticion
+            if search_str != "":
+                req_str += "&{}".format(search_str)
+
+            print("Recurso solicitado: {}".format(req_str))
+
+        bucle = True
+
+        # -- Pagina INDICE
+        if endpoint == "/":
+
+            message = self.req_index()
+            status = 200
+
+        # -- Listado de farmacos
+        elif endpoint == "/listDrugs":
+            status = 200
+            print("Listado de farmacos solicitado: ListDrugs!")
+            message = self.req_listdrugs(limit)
 
         elif endpoint == "/listCompanies":
-            for drug in results:
+            status = 200
+            print("Listado de empresas")
+            message = self.req_listcompanies(limit=10)
 
-                # Nombre del componente principal: drugs.openfda.substance_name[0]
-                try:
-                    contenido.format(drug['warnings'][0])
-                except KeyError:
-                    contenido.format("Sin advertencias")
-            html_file = self.content(medicamentos)
         elif endpoint == "/searchCompany":
-            for drug in results:
+            status = 200
+            print("Listado de farmacos solicitado: ListDrugs!")
+            message = self.req_searchcompany(limit)
 
-                # Nombre del componente principal: drugs.openfda.substance_name[0]
-                try:
-                    contenido.format(drug['warnings'][0])
-                except KeyError:
-                    message += "<li>{}</li>".format("Sin advertencias")
-            html_file = self.content(medicamentos)
         elif endpoint == "/searchDrug":
-            for drug in results:
+            status = 200
+            print("Listado de farmacos solicitado: ListDrugs!")
+            message = self.req_searchcompany(limit)
 
-                # Nombre del componente principal: drugs.openfda.substance_name[0]
-                try:
-                    medicamentos.append(drug['warnings'][0])
-                except KeyError:
-                    medicamentos.append("Sin advertencias")
-            html_file = self.content(medicamentos)
         elif endpoint == "/listWarnings":
-            for drug in results:
+            status = 200
+            print("Listado de farmacos solicitado: ListDrugs!")
+            message = self.req_listwarnings(limit)
 
-                # Nombre del componente principal: drugs.openfda.substance_name[0]
-                try:
-                    medicamentos.append(drug['warnings'][0])
-                except KeyError:
-                    medicamentos.append("Sin advertencias")
-            html_file = self.content(medicamentos)
 
         elif endpoint == "/redirect":
             self.send_response(301)
@@ -249,7 +502,9 @@ class OpenFDAParser(OpenFDAHTML):
             self.end_headers()
             self.wfile.write("I don't know '{}'.".format(self.path).encode())
 
+
         if bucle:
+
             # La primera linea del mensaje de respuesta es el
             # status. Indicamos que OK
             self.send_response(status)
@@ -261,23 +516,15 @@ class OpenFDAParser(OpenFDAHTML):
             self.end_headers()
 
             # Enviar el mensaaje completo
-            self.wfile.write(bytes(html_file, "utf8"))
-        print("Recurso pedido: {}".format(self.path))
+            self.wfile.write(bytes(message, "utf8"))
 
-
-
-
-
-#lógica para obtener los datos de los medicamentos
-
-#Generación del HTML para la visualización de la información
 
 
 # ----------------------------------
 # El servidor comienza a aqui
 # ----------------------------------
 # Establecemos como manejador nuestra propia clase
-Handler = OpenFDAParser
+Handler = TestHTTPRequestHandler
 
 # -- Configurar el socket del servidor, para esperar conexiones de clientes
 httpd = socketserver.TCPServer(("", PORT), Handler)
