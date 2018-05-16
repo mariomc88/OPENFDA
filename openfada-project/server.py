@@ -101,8 +101,6 @@ class TestHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                     </form>
                     <br>
                     <br>
-                    <p> Practica hecha por Javier Alvarez Benito </p>
-                    <p> Ingenieria Biomedica - URJC </p>
                 </body>
             </html>"""
 
